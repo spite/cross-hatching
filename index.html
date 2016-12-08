@@ -18,7 +18,7 @@
                 font-weight: normal;
 
                 background-color: #fff;
-                background-image: url( placeholder.jpg );
+                background-image: url(assets/placeholder.jpg);
                 background-position: 0 bottom;
                 margin: 0px;
                 overflow: hidden;
@@ -53,9 +53,9 @@
             }
         </style>
 
-<script src="three.min.js"></script>
-<script src="dat.gui.min.js"></script>
-<script src="ImprovedNoise.js"></script>
+<script src="js/three.min.js"></script>
+<script src="js/dat.gui.min.js"></script>
+<script src="js/ImprovedNoise.js"></script>
 
     </head>
 
@@ -140,7 +140,7 @@
             uniform vec4 inkColor;
 
             vec4 shade() {
-                
+
                 float diffuse = nDotVP;
                 float specular = 0.;
                 float ambient = 1.;
@@ -163,7 +163,7 @@
 
                 vec4 c = vec4( 1. ,1., 1., 1. );
                 float step = 1. / 6.;
-                if( shading <= step ){   
+                if( shading <= step ){
                     c = mix( texture2D( hatch6, vUv ), texture2D( hatch5, vUv ), 6. * shading );
                     //c = vec4( step );
                 }
@@ -213,7 +213,7 @@
             }
 
         </script>
-       
+
         <script>
 
         var links = document.querySelectorAll( 'a[rel=external]' );
@@ -292,7 +292,8 @@
 
             scene = new THREE.Scene();
 
-            renderer = new THREE.WebGLRenderer( { antialias: true } );
+            renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
+            renderer.setPixelRatio( window.devicePixelRatio )
             renderer.setSize( WIDTH, HEIGHT );
             renderer.autoClear = false;
 
@@ -316,13 +317,13 @@
                     resolution: { type: 'v2', value: new THREE.Vector2( 0, 0 ) },
                     bkgResolution: { type: 'v2', value: new THREE.Vector2( 0, 0 ) },
                     lightPosition: { type: 'v3', value: new THREE.Vector3( -100, 100, 0 ) },
-                    hatch1: { type: 't', value: THREE.ImageUtils.loadTexture( id + '0.jpg' ) },
-                    hatch2: { type: 't', value: THREE.ImageUtils.loadTexture( id + '1.jpg' ) },
-                    hatch3: { type: 't', value: THREE.ImageUtils.loadTexture( id + '2.jpg' ) },
-                    hatch4: { type: 't', value: THREE.ImageUtils.loadTexture( id + '3.jpg' ) },
-                    hatch5: { type: 't', value: THREE.ImageUtils.loadTexture( id + '4.jpg' ) },
-                    hatch6: { type: 't', value: THREE.ImageUtils.loadTexture( id + '5.jpg' ) },
-                    paper: { type: 't', value: THREE.ImageUtils.loadTexture( 'placeholder.jpg' ) },
+                    hatch1: { type: 't', value: THREE.ImageUtils.loadTexture( 'assets/' + id + '0.jpg' ) },
+                    hatch2: { type: 't', value: THREE.ImageUtils.loadTexture( 'assets/' + id + '1.jpg' ) },
+                    hatch3: { type: 't', value: THREE.ImageUtils.loadTexture( 'assets/' + id + '2.jpg' ) },
+                    hatch4: { type: 't', value: THREE.ImageUtils.loadTexture( 'assets/' + id + '3.jpg' ) },
+                    hatch5: { type: 't', value: THREE.ImageUtils.loadTexture( 'assets/' + id + '4.jpg' ) },
+                    hatch6: { type: 't', value: THREE.ImageUtils.loadTexture( 'assets/' + id + '5.jpg' ) },
+                    paper: { type: 't', value: THREE.ImageUtils.loadTexture( 'assets/placeholder.jpg' ) },
                     repeat: { type: 'v2', value: new THREE.Vector2( 0, 0 ) }
                 },
                 vertexShader:   document.getElementById( 'vertexshader' ).textContent,
@@ -333,7 +334,7 @@
             material.uniforms.paper.value.generateMipmaps = false;
             material.uniforms.paper.value.magFilter = THREE.LinearFilter;
             material.uniforms.paper.value.minFilter = THREE.LinearFilter;
-            
+
             material.uniforms.repeat.value.set( 1,1 );
             material.uniforms.hatch1.value.wrapS = material.uniforms.hatch1.value.wrapT = THREE.RepeatWrapping;
             material.uniforms.hatch2.value.wrapS = material.uniforms.hatch2.value.wrapT = THREE.RepeatWrapping;
@@ -342,11 +343,11 @@
             material.uniforms.hatch5.value.wrapS = material.uniforms.hatch5.value.wrapT = THREE.RepeatWrapping;
             material.uniforms.hatch6.value.wrapS = material.uniforms.hatch6.value.wrapT = THREE.RepeatWrapping;
 
-            setPreset( 'Default' );            
+            setPreset( 'Default' );
 
             window.addEventListener( 'resize', onWindowResize, false );
             onWindowResize();
-           
+
             container.addEventListener( 'mousedown', onTouchStart );
             container.addEventListener( 'touchstart', onTouchStart );
 
@@ -388,12 +389,12 @@
 
 
                 if ( isUserInteracting ) {
-                
+
                     nlon = ( x - onPointerDownPointerX ) * 0.5 + onPointerDownLon;
                     nlat = ( y - onPointerDownPointerY ) * 0.5 + onPointerDownLat;
-                    
+
                 }
-                
+
                 event.preventDefault();
 
             }
@@ -434,7 +435,7 @@
                     nfov += event.detail * 1.0;
 
                 }
-                
+
             }
 
             animate();
@@ -449,13 +450,13 @@
 
             var img = new Image();
             img.addEventListener( 'load', function() {
-                material.uniforms.paper.value = THREE.ImageUtils.loadTexture( files[ id ] );
+                material.uniforms.paper.value = THREE.ImageUtils.loadTexture( 'assets/' + files[ id ] );
                 material.uniforms.paper.value.needsUpdate = true;
-                document.body.style.backgroundImage = 'url(' + files[ id ] + ')';
+                document.body.style.backgroundImage = 'url(assets/' + files[ id ] + ')';
                 material.uniforms.bkgResolution.value.set( this.width, this.height );
                 settings.currentPaper = id;
             } );
-            img.src = files[ id ];
+            img.src = 'assets/' + files[ id ];
         }
 
         function turbulence( x, y, z ) {
@@ -475,8 +476,8 @@
                 case 2: mesh = new THREE.Mesh( new THREE.SphereGeometry( 40, 36, 36 ), material ); material.uniforms.repeat.value.set( 4, 4 ); break;
                 case 3: mesh = new THREE.Mesh( new THREE.TorusKnotGeometry( 50, 10, 200, 50, 1 ,3 ), material ); material.uniforms.repeat.value.set( 20, 2 ); break;
                 case 4: mesh = new THREE.Mesh( new THREE.TorusGeometry( 50, 20, 200, 50 ), material ); material.uniforms.repeat.value.set( 4, 2 ); break;
-                case 5: 
-                    mesh = new THREE.Mesh( new THREE.IcosahedronGeometry( 40, 4 ), material ); 
+                case 5:
+                    mesh = new THREE.Mesh( new THREE.IcosahedronGeometry( 40, 4 ), material );
                     for( var j = 0; j < mesh.geometry.vertices.length; j++ ) {
                         var v = mesh.geometry.vertices[ j ];
                         var n = v.clone();
@@ -487,7 +488,7 @@
                         v.add( n.multiplyScalar( d ) );
                     }
                     mesh.geometry.verticesNeedUpdate = true;
-                    mesh.geometry.computeCentroids();
+                    //mesh.geometry.computeCentroids();
                     mesh.geometry.computeFaceNormals();
                     mesh.geometry.computeVertexNormals();
                     material.uniforms.repeat.value.set( 4, 4 ); break;
@@ -528,7 +529,7 @@
         }
 
         function animate() {
-            
+
             render();
             requestAnimationFrame( animate );
 
@@ -567,7 +568,7 @@
 
             var pId = parseInt( settings.paper, 10 );
             if( pId != settings.currentPaper ) setPaper( pId );
-            
+
             var time = Date.now() * 0.005;
 
             nlat = Math.max( - 85, Math.min( 85, nlat ) );
