@@ -1,633 +1,518 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-    <head>
-        <title>Cross-hatching GLSL shader</title>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-        <style>
-            *{
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-            }
-            body {
-                color: #222;
-                font-family: tahoma, sans-serif;
-                font-size:13px;
-                text-align: left;
-                font-weight: normal;
-
-                background-color: #fff;
-                background-image: url(assets/placeholder.jpg);
-                background-position: 0 bottom;
-                margin: 0px;
-                overflow: hidden;
-            }
-            #info {
-                background-color: rgba( 0, 0, 0, .6 );
-                color: #fff;
-                text-shadow: 0 -1px 0 rgba( 0, 0, 0, .6 );
-                position: absolute;
-                left: 10px; top: 0;
-                padding: 20px;
-                z-index: 100;
-            }
-            #info p{
-                margin-bottom: 10px;
-            }
-            #info p:last-child{
-                margin-bottom: 0;
-            }
-            #container{
-            }
-            h1{
-                font-size: 12px;
-                margin-bottom: 5px;
-            }
-            a{ color: white;}
-            .dg *{
-                box-sizing: content-box;
-            }
-            @media only screen and (max-device-width: 480px) {
-                #info{ display: none;}
-            }
-        </style>
-
-<script src="js/three.min.js"></script>
-<script src="js/dat.gui.min.js"></script>
-<script src="js/ImprovedNoise.js"></script>
-
-    </head>
-
-    <body>
-
-        <div id="info">
-            <p><b>Cross-hatching GLSL shader</b> Blinn-Phong shading and rim lighting.<br/>
-            Based on <a href="http://research.microsoft.com/en-us/um/people/hoppe/hatching.pdf" rel="external" >Microsoft Research "Real-Time Hatching" paper</a>.</p>
-            <p>Click and drag to move model, scroll to zoom. Play with the controls!<br/>
-                Coded by Jaume Sanchez <a href="http://www.twitter.com/thespite" rel="external" >@thespite</a> using <a href="http://threejs.org/" rel="external" >three.js</a>.
-            </p>
-        </div>
-        <div id="container"></div>
-
-        <script type="x-shader/x-vertex" id="vertexshader">
-
-            varying vec3 vNormal;
-            varying vec2 vUv;
-            varying float depth;
-            varying vec3 vPosition;
-            varying float nDotVP;
-            varying vec3 pos;
-
-            uniform vec2 repeat;
-            uniform vec3 lightPosition;
-            uniform float showOutline;
-
-            void main() {
-
-                float w = 1.;
-                vec3 posInc = vec3( 0. );
-                if( showOutline == 1. ) posInc = w * normal;
-
-                vUv = repeat * uv;
-
-                vec4 mvPosition = modelViewMatrix * vec4( position + posInc, 1.0 );
-                vPosition = mvPosition.xyz;
-                gl_Position = projectionMatrix * mvPosition;
-                pos = gl_Position.xyz;
-
-                vNormal = normalMatrix * normal;
-                depth = ( length( position.xyz ) / 90. );
-                depth = .5 + .5 * depth;
-
-                nDotVP = max( 0., dot( vNormal, normalize( vec3( lightPosition ) ) ) );
-
-            }
-
-        </script>
-
-        <script type="x-shader/x-fragment" id="fragmentshader">
-
-            uniform sampler2D hatch1;
-            uniform sampler2D hatch2;
-            uniform sampler2D hatch3;
-            uniform sampler2D hatch4;
-            uniform sampler2D hatch5;
-            uniform sampler2D hatch6;
-            uniform sampler2D paper;
-            uniform vec2 resolution;
-            uniform vec2 bkgResolution;
-            uniform vec3 lightPosition;
-
-            vec3 color = vec3( 1., 0., 1. );
-            vec3 lightColor = vec3( 1. );
-
-            varying vec2 vUv;
-            varying vec3 vNormal;
-            varying float depth;
-            varying vec3 vPosition;
-            varying float nDotVP;
-            varying vec3 pos;
-
-            uniform float ambientWeight;
-            uniform float diffuseWeight;
-            uniform float rimWeight;
-            uniform float specularWeight;
-            uniform float shininess;
-            uniform int invertRim;
-            uniform int solidRender;
-            uniform float showOutline;
-            uniform vec4 inkColor;
-
-            vec4 shade() {
-
-                float diffuse = nDotVP;
-                float specular = 0.;
-                float ambient = 1.;
-
-                vec3 n = normalize( vNormal );
-
-                vec3 r = -reflect(lightPosition, n);
-                r = normalize(r);
-                vec3 v = -vPosition.xyz;
-                v = normalize(v);
-                float nDotHV = max( 0., dot( r, v ) );
-
-                if( nDotVP != 0. ) specular = pow ( nDotHV, shininess );
-                float rim = max( 0., abs( dot( n, normalize( -vPosition.xyz ) ) ) );
-                if( invertRim == 1 ) rim = 1. - rim;
-
-                float shading = ambientWeight * ambient + diffuseWeight * diffuse + rimWeight * rim + specularWeight * specular;
-
-                if( solidRender == 1 ) return vec4( shading );
-
-                vec4 c = vec4( 1. ,1., 1., 1. );
-                float step = 1. / 6.;
-                if( shading <= step ){
-                    c = mix( texture2D( hatch6, vUv ), texture2D( hatch5, vUv ), 6. * shading );
-                    //c = vec4( step );
-                }
-                if( shading > step && shading <= 2. * step ){
-                    c = mix( texture2D( hatch5, vUv ), texture2D( hatch4, vUv) , 6. * ( shading - step ) );
-                    //c = vec4( 2. * step );
-                }
-                if( shading > 2. * step && shading <= 3. * step ){
-                    c = mix( texture2D( hatch4, vUv ), texture2D( hatch3, vUv ), 6. * ( shading - 2. * step ) );
-                    //c = vec4( 3. * step );
-                }
-                if( shading > 3. * step && shading <= 4. * step ){
-                    c = mix( texture2D( hatch3, vUv ), texture2D( hatch2, vUv ), 6. * ( shading - 3. * step ) );
-                    //c = vec4( 4. * step );
-                }
-                if( shading > 4. * step && shading <= 5. * step ){
-                    c = mix( texture2D( hatch2, vUv ), texture2D( hatch1, vUv ), 6. * ( shading - 4. * step ) );
-                    //c = vec4( 5. * step );
-                }
-                if( shading > 5. * step ){
-                    c = mix( texture2D( hatch1, vUv ), vec4( 1. ), 6. * ( shading - 5. * step ) );
-                    //c = vec4( 6. * step );
-                }
-
-                vec4 src = mix( mix( inkColor, vec4( 1. ), c.r ), c, .5 );
-                //c = 1. - ( 1. - src ) * ( 1. - dst );
-                //c = vec4( min( src.r, dst.r ), min( src.g, dst.g ), min( src.b, dst.b ), 1. );
-
-                //c = vec4( gl_FragCoord.x / resolution.x, gl_FragCoord.y / resolution.y, 0., 1. );
-
-                return src;
-            }
-
-            void main() {
-
-                vec2 nUV = vec2( mod( gl_FragCoord.x, bkgResolution.x ) / bkgResolution.x, mod( gl_FragCoord.y, bkgResolution.y ) / bkgResolution.y );
-                vec4 dst = vec4( texture2D( paper, nUV ).rgb, 1. );
-                vec4 src;
-
-                //if( showOutline == 1 ) src = .5 * inkColor;
-                //else src = shade();
-                src = ( .5 * inkColor ) * vec4( showOutline ) + vec4( 1. - showOutline ) * shade();
-
-                vec4 c = src * dst;
-
-                gl_FragColor = vec4( c.rgb, 1. );
-            }
-
-        </script>
-
-        <script>
-
-        var links = document.querySelectorAll( 'a[rel=external]' );
-        for( var j = 0; j < links.length; j++ ) {
-            var a = links[ j ];
-            a.addEventListener( 'click', function( e ) {
-                window.open( this.href, '_blank' );
-                e.preventDefault();
-            }, false );
-        }
-
-        var noise = new ImprovedNoise();
-        var renderer, scene, camera, mesh;
-        var mesh, cube, pMesh, material;
-
-        var fov = 120, nfov = 45;
-
-        var onMouseDownMouseX = 0, onMouseDownMouseY = 0,
-        lon = 0, onMouseDownLon = 0, nlat = 0,
-        lat = 0, onMouseDownLat = 0, nlon = 0,
-        phi = 0, theta = 0;
-        lat = 15, isUserInteracting = false;
-
-        var WIDTH = window.innerWidth;
-        var HEIGHT = window.innerHeight;
-        var colors = [ [ 0, 186, 233 ], [ 222, 0, 21 ], [ 233, 77, 0 ], [ 113, 206, 3 ], [ 219, 118, 255 ] ];
-
-        var presets = {
-            'Default': { ambient: 8, diffuse: 100, specular: 100, rim: 46, shininess: 49, invertRim: false, displayOutline: false, solidRender: false, model: 3, paper: 0, inkColor: [ 72, 72, 164 ] },
-            'Sketch': { ambient: 9.8, diffuse: 100, specular: 100, rim: 81, shininess: 12, invertRim: true, displayOutline: false, solidRender: false, model: 5, paper: 2, inkColor: [ 175, 175, 175 ] },
-            'Classroom': { ambient: 13, diffuse: 27, specular: 100, rim: 76, shininess: 27, invertRim: false, displayOutline: true, solidRender: false, model: 2, paper: 3, inkColor: [ 41, 41, 202 ] },
-            'Engraving': { ambient: 0, diffuse: 57, specular: 100, rim: 77, shininess: 15, invertRim: true, displayOutline: false, solidRender: false, model: 4, paper: 1, inkColor: [ 90, 120, 111 ] }
-        };
-
-        var Settings = function() {
-            this.ambient = 1;
-            this.diffuse = 100;
-            this.specular = 100;
-            this.rim = 0;
-            this.shininess = 100;
-            this.invertRim = false;
-            this.displayOutline = false;
-            this.solidRender = false;
-            this.inkColor = [ 0, 0, 90 ];
-            this.model = 3;
-            this.paper = 1;
-            this.preset = 0;
-        };
-        var settings = new Settings();
-        var gui = new dat.GUI();
-
-        init();
-
-        function init() {
-
-            var presetSelector = {};
-            for( var j in presets ) {
-                presetSelector[ j ] = j;
-            }
-
-            gui.add( settings, 'preset', presetSelector );
-            gui.add( settings, 'ambient', 0.0, 100.0 );
-            gui.add( settings, 'diffuse', 0.0, 100.0 );
-            gui.add( settings, 'specular', 0.0, 100.0 );
-            gui.add( settings, 'rim', 0.0, 100.0 );
-            gui.add( settings, 'shininess', 1, 100 );
-            gui.add( settings, 'invertRim' );
-            gui.add( settings, 'displayOutline' );
-            gui.add( settings, 'solidRender' );
-            gui.add( settings, 'model', { Cube: 1, Sphere: 2, TorusKnot: 3, Torus: 4, Distort: 5, Capsule: 6 } );
-            gui.add( settings, 'paper', { Crumpled: 0, Grainy: 1, Fibers: 2, Squared: 3, Wrapper: 4, Parchment: 5 } );
-            gui.addColor( settings, 'inkColor' );
-
-            camera = new THREE.PerspectiveCamera( fov, WIDTH / HEIGHT, 1, 1000 );
-            camera.position.z = 300;
-
-            scene = new THREE.Scene();
-
-            renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
-            renderer.setPixelRatio( window.devicePixelRatio )
-            renderer.setSize( WIDTH, HEIGHT );
-            renderer.autoClear = false;
-
-            var container = document.getElementById( 'container' );
-            container.appendChild( renderer.domElement );
-
-            var id = 'hatch_';
-
-            material = new THREE.ShaderMaterial( {
-
-                uniforms:       {
-                    showOutline: { type: 'f', value: 0 },
-                    ambientWeight: { type: 'f', value : 0 },
-                    diffuseWeight: { type: 'f', value : 1 },
-                    rimWeight: { type: 'f', value : 1 },
-                    specularWeight: { type: 'f', value : 1 },
-                    shininess: { type: 'f', value : 1 },
-                    invertRim: { type: 'i', value: 0 },
-                    inkColor: { type: 'v4', value: new THREE.Vector3( 0, 0,0 ) },
-                    solidRender: { type: 'i', value: 0 },
-                    resolution: { type: 'v2', value: new THREE.Vector2( 0, 0 ) },
-                    bkgResolution: { type: 'v2', value: new THREE.Vector2( 0, 0 ) },
-                    lightPosition: { type: 'v3', value: new THREE.Vector3( -100, 100, 0 ) },
-                    hatch1: { type: 't', value: THREE.ImageUtils.loadTexture( 'assets/' + id + '0.jpg' ) },
-                    hatch2: { type: 't', value: THREE.ImageUtils.loadTexture( 'assets/' + id + '1.jpg' ) },
-                    hatch3: { type: 't', value: THREE.ImageUtils.loadTexture( 'assets/' + id + '2.jpg' ) },
-                    hatch4: { type: 't', value: THREE.ImageUtils.loadTexture( 'assets/' + id + '3.jpg' ) },
-                    hatch5: { type: 't', value: THREE.ImageUtils.loadTexture( 'assets/' + id + '4.jpg' ) },
-                    hatch6: { type: 't', value: THREE.ImageUtils.loadTexture( 'assets/' + id + '5.jpg' ) },
-                    paper: { type: 't', value: THREE.ImageUtils.loadTexture( 'assets/placeholder.jpg' ) },
-                    repeat: { type: 'v2', value: new THREE.Vector2( 0, 0 ) }
-                },
-                vertexShader:   document.getElementById( 'vertexshader' ).textContent,
-                fragmentShader: document.getElementById( 'fragmentshader' ).textContent
-
-            });
-
-            material.uniforms.paper.value.generateMipmaps = false;
-            material.uniforms.paper.value.magFilter = THREE.LinearFilter;
-            material.uniforms.paper.value.minFilter = THREE.LinearFilter;
-
-            material.uniforms.repeat.value.set( 1,1 );
-            material.uniforms.hatch1.value.wrapS = material.uniforms.hatch1.value.wrapT = THREE.RepeatWrapping;
-            material.uniforms.hatch2.value.wrapS = material.uniforms.hatch2.value.wrapT = THREE.RepeatWrapping;
-            material.uniforms.hatch3.value.wrapS = material.uniforms.hatch3.value.wrapT = THREE.RepeatWrapping;
-            material.uniforms.hatch4.value.wrapS = material.uniforms.hatch4.value.wrapT = THREE.RepeatWrapping;
-            material.uniforms.hatch5.value.wrapS = material.uniforms.hatch5.value.wrapT = THREE.RepeatWrapping;
-            material.uniforms.hatch6.value.wrapS = material.uniforms.hatch6.value.wrapT = THREE.RepeatWrapping;
-
-            setPreset( 'Default' );
+	<head>
+		<title>Cross-hatching GLSL shader</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/guspira@0.1.1/dist/guspira.min.css">
+		<style>
+			* { margin: 0; padding: 0; box-sizing: border-box; }
+			html, body { height: 100%; }
+			body {
+				color: #222;
+				font-family: tahoma, sans-serif;
+				font-size: 13px;
+				background-color: #ddd;
+				background-position: center;
+				background-size: cover;
+				background-repeat: no-repeat;
+			}
+			body.tiled {
+				background-position: 0 bottom;
+				background-size: auto;
+				background-repeat: repeat;
+				overflow: hidden;
+			}
+			canvas { position: fixed; left: 0; top: 0; display: block; touch-action: none; cursor: grab; }
+			canvas.dragging { cursor: grabbing; }
+			#info {
+				background-color: rgba( 0, 0, 0, .6 );
+				color: #fff;
+				text-shadow: 0 -1px 0 rgba( 0, 0, 0, .6 );
+				position: absolute;
+				left: 10px; top: 0;
+				max-width: 460px;
+				padding: 20px;
+				line-height: 1.4em;
+				z-index: 100;
+			}
+			#info p { margin-bottom: 10px; }
+			#info p:last-child { margin-bottom: 0; }
+			a { color: white; }
+			#gui-container { position: absolute; right: 0; top: 0; width: 300px; max-height: 100%; overflow: auto; z-index: 100; }
+			@media only screen and (max-width: 700px) {
+				#info { display: none; }
+			}
+		</style>
+		<script type="importmap">
+		{
+			"imports": {
+				"three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+				"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+			}
+		}
+		</script>
+	</head>
+
+	<body>
+
+		<div id="info">
+			<p><b>Cross-hatching GLSL shader</b> Blinn-Phong shading and rim lighting.<br>
+			Based on <a href="https://hhoppe.com/hatching.pdf" target="_blank" rel="noopener">Microsoft Research "Real-Time Hatching" paper</a>.</p>
+			<p>Click and drag to move the model, scroll or pinch to zoom. Play with the controls!<br>
+			Coded by Jaume Sanchez <a href="https://twitter.com/thespite" target="_blank" rel="noopener">@thespite</a> using <a href="https://threejs.org/" target="_blank" rel="noopener">three.js</a>.<br>
+			Find the code on <a href="https://github.com/spite/cross-hatching" target="_blank" rel="noopener">GitHub</a>.</p>
+		</div>
+		<div id="gui-container"></div>
+
+		<script type="x-shader/x-vertex" id="vertexshader">
+
+			varying vec3 vNormal;
+			varying vec2 vUv;
+			varying vec3 vPosition;
+			varying float nDotVP;
+
+			uniform vec2 repeat;
+			uniform vec3 lightPosition;
+			uniform float showOutline;
+
+			void main() {
+
+				// the outline is the mesh, a bit bigger, behind it
+				vec3 posInc = showOutline * normal;
+
+				vUv = repeat * uv;
+
+				vec4 mvPosition = modelViewMatrix * vec4( position + posInc, 1.0 );
+				vPosition = mvPosition.xyz;
+				gl_Position = projectionMatrix * mvPosition;
+
+				vNormal = normalMatrix * normal;
+
+				nDotVP = max( 0., dot( vNormal, normalize( lightPosition ) ) );
+
+			}
+
+		</script>
+
+		<script type="x-shader/x-fragment" id="fragmentshader">
+
+			uniform sampler2D hatch1;
+			uniform sampler2D hatch2;
+			uniform sampler2D hatch3;
+			uniform sampler2D hatch4;
+			uniform sampler2D hatch5;
+			uniform sampler2D hatch6;
+			uniform sampler2D paper;
+			uniform vec2 bkgResolution;
+			uniform vec2 viewport;
+			uniform float pixelRatio;
+			uniform float tiled;
+			uniform vec3 lightPosition;
+
+			varying vec2 vUv;
+			varying vec3 vNormal;
+			varying vec3 vPosition;
+			varying float nDotVP;
+
+			uniform float ambientWeight;
+			uniform float diffuseWeight;
+			uniform float rimWeight;
+			uniform float specularWeight;
+			uniform float shininess;
+			uniform float invertRim;
+			uniform float solidRender;
+			uniform float showOutline;
+			uniform vec3 inkColor;
+
+			vec4 shade() {
+
+				float diffuse = nDotVP;
+				float specular = 0.;
+				float ambient = 1.;
+
+				vec3 n = normalize( vNormal );
+
+				vec3 r = normalize( - reflect( lightPosition, n ) );
+				vec3 v = normalize( - vPosition.xyz );
+				float nDotHV = max( 0., dot( r, v ) );
+
+				if( nDotVP != 0. ) specular = pow( nDotHV, shininess );
+				float rim = max( 0., abs( dot( n, v ) ) );
+				if( invertRim == 1. ) rim = 1. - rim;
+
+				float shading = ambientWeight * ambient + diffuseWeight * diffuse + rimWeight * rim + specularWeight * specular;
+
+				if( solidRender == 1. ) return vec4( shading );
+
+				// from the darkest texture to the lightest, and then to white
+				vec4 c = vec4( 1. );
+				float step = 1. / 6.;
+				if( shading <= step ) {
+					c = mix( texture2D( hatch6, vUv ), texture2D( hatch5, vUv ), 6. * shading );
+				}
+				if( shading > step && shading <= 2. * step ) {
+					c = mix( texture2D( hatch5, vUv ), texture2D( hatch4, vUv ), 6. * ( shading - step ) );
+				}
+				if( shading > 2. * step && shading <= 3. * step ) {
+					c = mix( texture2D( hatch4, vUv ), texture2D( hatch3, vUv ), 6. * ( shading - 2. * step ) );
+				}
+				if( shading > 3. * step && shading <= 4. * step ) {
+					c = mix( texture2D( hatch3, vUv ), texture2D( hatch2, vUv ), 6. * ( shading - 3. * step ) );
+				}
+				if( shading > 4. * step && shading <= 5. * step ) {
+					c = mix( texture2D( hatch2, vUv ), texture2D( hatch1, vUv ), 6. * ( shading - 4. * step ) );
+				}
+				if( shading > 5. * step ) {
+					c = mix( texture2D( hatch1, vUv ), vec4( 1. ), 6. * ( shading - 5. * step ) );
+				}
+
+				return mix( mix( vec4( inkColor, 1. ), vec4( 1. ), c.r ), c, .5 );
+
+			}
+
+			void main() {
+
+				// the paper as the page has it behind the canvas: one sheet that covers it, or tiles from the bottom left
+				vec2 page = gl_FragCoord.xy / pixelRatio;
+				vec2 sheet = bkgResolution * max( viewport.x / bkgResolution.x, viewport.y / bkgResolution.y );
+				vec2 paperUv = tiled == 1. ? mod( page, bkgResolution ) / bkgResolution : ( page - .5 * ( viewport - sheet ) ) / sheet;
+				vec4 dst = vec4( texture2D( paper, paperUv ).rgb, 1. );
+
+				vec4 src = showOutline == 1. ? .5 * vec4( inkColor, 1. ) : shade();
+
+				gl_FragColor = vec4( ( src * dst ).rgb, 1. );
+
+			}
+
+		</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { ImprovedNoise } from 'three/addons/math/ImprovedNoise.js';
+import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GUI, signal, effect } from 'https://cdn.jsdelivr.net/npm/guspira@0.1.1/dist/guspira.min.js';
+
+// each one is a sheet that covers the page, but the squared one, which tiles so its grid stays the same size
+const papers = {
+	crumpled: { file: 'paper.jpg' },
+	grainy: { file: 'paper2.jpg' },
+	fibers: { file: 'brown.jpg' },
+	squared: { file: 'paper4.jpg', tiled: true },
+	wrapper: { file: 'paper5.jpg' },
+	parchment: { file: 'paper6.jpg' }
+};
+
+const presets = {
+	Default: { ambient: 8, diffuse: 100, specular: 100, rim: 46, shininess: 49, invertRim: false, outline: false, solid: false, model: 'torusKnot', paper: 'crumpled', ink: '#4848a4' },
+	Sketch: { ambient: 9.8, diffuse: 100, specular: 100, rim: 81, shininess: 12, invertRim: true, outline: false, solid: false, model: 'distort', paper: 'fibers', ink: '#afafaf' },
+	Classroom: { ambient: 13, diffuse: 27, specular: 100, rim: 76, shininess: 27, invertRim: false, outline: true, solid: false, model: 'sphere', paper: 'squared', ink: '#2929ca' },
+	Engraving: { ambient: 0, diffuse: 57, specular: 100, rim: 77, shininess: 15, invertRim: true, outline: false, solid: false, model: 'torus', paper: 'grainy', ink: '#5a786f' },
+};
+
+const params = {
+	preset: signal( 'Default' ),
+	ambient: signal( 8 ),
+	diffuse: signal( 100 ),
+	specular: signal( 100 ),
+	rim: signal( 46 ),
+	shininess: signal( 49 ),
+	invertRim: signal( false ),
+	outline: signal( false ),
+	solid: signal( false ),
+	model: signal( 'torusKnot' ),
+	paper: signal( 'crumpled' ),
+	ink: signal( '#4848a4' )
+};
+
+const gui = new GUI( 'Cross-hatching', document.getElementById( 'gui-container' ) );
+gui.addSelect( 'preset', params.preset, Object.keys( presets ) );
+gui.addSeparator();
+gui.addSlider( 'ambient', params.ambient, 0, 100, .1 );
+gui.addSlider( 'diffuse', params.diffuse, 0, 100, .1 );
+gui.addSlider( 'specular', params.specular, 0, 100, .1 );
+gui.addSlider( 'rim', params.rim, 0, 100, .1 );
+gui.addSlider( 'shininess', params.shininess, 1, 100, .1 );
+gui.addCheckbox( 'invert rim', params.invertRim );
+gui.addCheckbox( 'outline', params.outline );
+gui.addCheckbox( 'solid render', params.solid );
+gui.addSeparator();
+gui.addSelect( 'model', params.model, [ [ 'cube', 'Cube' ], [ 'sphere', 'Sphere' ], [ 'torusKnot', 'Torus knot' ], [ 'torus', 'Torus' ], [ 'distort', 'Distort' ], [ 'capsule', 'Capsule' ] ] );
+gui.addSelect( 'paper', params.paper, [ [ 'crumpled', 'Crumpled' ], [ 'grainy', 'Grainy' ], [ 'fibers', 'Fibers' ], [ 'squared', 'Squared' ], [ 'wrapper', 'Wrapper' ], [ 'parchment', 'Parchment' ] ] );
+gui.addColor( 'ink', params.ink );
+
+effect( function () {
+
+	const preset = presets[ params.preset() ];
+	for ( const name in preset ) params[ name ].set( preset[ name ] );
+
+} );
+
+const renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
+renderer.setPixelRatio( window.devicePixelRatio );
+renderer.setSize( window.innerWidth, window.innerHeight );
+renderer.autoClear = false;
+document.body.appendChild( renderer.domElement );
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera( 120, window.innerWidth / window.innerHeight, 1, 1100 );
+
+const loader = new THREE.TextureLoader();
+
+const material = new THREE.ShaderMaterial( {
+	uniforms: {
+		showOutline: { value: 0 },
+		ambientWeight: { value: 0 },
+		diffuseWeight: { value: 1 },
+		rimWeight: { value: 1 },
+		specularWeight: { value: 1 },
+		shininess: { value: 1 },
+		invertRim: { value: 0 },
+		solidRender: { value: 0 },
+		inkColor: { value: new THREE.Vector3() },
+		bkgResolution: { value: new THREE.Vector2( 1, 1 ) },
+		viewport: { value: new THREE.Vector2( window.innerWidth, window.innerHeight ) },
+		tiled: { value: 0 },
+		pixelRatio: { value: 1 },
+		lightPosition: { value: new THREE.Vector3( - 100, 100, 0 ) },
+		hatch1: { value: null },
+		hatch2: { value: null },
+		hatch3: { value: null },
+		hatch4: { value: null },
+		hatch5: { value: null },
+		hatch6: { value: null },
+		paper: { value: null },
+		repeat: { value: new THREE.Vector2( 1, 1 ) }
+	},
+	vertexShader: document.getElementById( 'vertexshader' ).textContent,
+	fragmentShader: document.getElementById( 'fragmentshader' ).textContent
+} );
+
+// ---- the hatching, from the lightest texture to the darkest
+
+for ( let i = 0; i < 6; i ++ ) {
+
+	const texture = loader.load( `assets/hatch_${ i }.jpg` );
+	texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+	material.uniforms[ 'hatch' + ( i + 1 ) ].value = texture;
+
+}
+
+// ---- the paper, behind the canvas and in the shader
+
+effect( function () {
+
+	const paper = papers[ params.paper() ];
+	const file = 'assets/' + paper.file;
+
+	loader.load( file, function ( texture ) {
+
+		// a later choice already won
+		if ( paper !== papers[ params.paper() ] ) return texture.dispose();
+
+		texture.generateMipmaps = false;
+		texture.minFilter = THREE.LinearFilter;
+
+		if ( material.uniforms.paper.value ) material.uniforms.paper.value.dispose();
+		material.uniforms.paper.value = texture;
+		material.uniforms.bkgResolution.value.set( texture.image.width, texture.image.height );
+		material.uniforms.tiled.value = paper.tiled ? 1 : 0;
+		document.body.classList.toggle( 'tiled', paper.tiled === true );
+		document.body.style.backgroundImage = `url(${ file })`;
+
+	} );
+
+} );
+
+// ---- the models
+
+const noise = new ImprovedNoise();
+
+function distorted() {
+
+	const geometry = new THREE.IcosahedronGeometry( 40, 15 );
+	const position = geometry.attributes.position;
+	const v = new THREE.Vector3();
+	const n = new THREE.Vector3();
+	const f = .05;
+
+	for ( let i = 0; i < position.count; i ++ ) {
+
+		v.fromBufferAttribute( position, i );
+		n.copy( v ).normalize();
+		v.add( n.multiplyScalar( 10 * noise.noise( f * v.x, f * v.y, f * v.z ) ) );
+		position.setXYZ( i, v.x, v.y, v.z );
+
+	}
+
+	// smooth across the faces, which don't share their vertices
+	return toCreasedNormals( geometry, Math.PI );
+
+}
+
+const models = {
+	cube: { make: () => new THREE.BoxGeometry( 40, 40, 40 ), repeat: [ 1, 1 ] },
+	sphere: { make: () => new THREE.SphereGeometry( 40, 36, 36 ), repeat: [ 4, 4 ] },
+	torusKnot: { make: () => new THREE.TorusKnotGeometry( 50, 10, 200, 50, 1, 3 ), repeat: [ 20, 2 ] },
+	torus: { make: () => new THREE.TorusGeometry( 50, 20, 200, 50 ), repeat: [ 4, 2 ] },
+	distort: { make: distorted, repeat: [ 4, 4 ] },
+	capsule: { make: () => new THREE.CapsuleGeometry( 25, 50, 16, 40 ), repeat: [ 2, 1 ] }
+};
 
-            window.addEventListener( 'resize', onWindowResize, false );
-            onWindowResize();
+const mesh = new THREE.Mesh( new THREE.BufferGeometry(), material );
+scene.add( mesh );
 
-            container.addEventListener( 'mousedown', onTouchStart );
-            container.addEventListener( 'touchstart', onTouchStart );
+effect( function () {
 
-            function onTouchStart( event ) {
+	const model = models[ params.model() ];
 
-                var x, y;
-
-                if( event.changedTouches ) {
-                    x = event.changedTouches[ 0 ].pageX;
-                    y = event.changedTouches[ 0 ].pageY;
-                } else {
-                    x = event.clientX;
-                    y = event.clientY;
-                }
-
-                isUserInteracting = true;
-
-                onPointerDownPointerX = x;
-                onPointerDownPointerY = y;
-
-                onPointerDownLon = lon;
-                onPointerDownLat = lat;
-
-                event.preventDefault();
-            }
-
-            container.addEventListener( 'mousemove', onTouchMove );
-            container.addEventListener( 'touchmove', onTouchMove );
-
-            function onTouchMove( event ) {
-
-                if( event.changedTouches ) {
-                    x = event.changedTouches[ 0 ].pageX;
-                    y = event.changedTouches[ 0 ].pageY;
-                } else {
-                    x = event.clientX;
-                    y = event.clientY;
-                }
-
-
-                if ( isUserInteracting ) {
-
-                    nlon = ( x - onPointerDownPointerX ) * 0.5 + onPointerDownLon;
-                    nlat = ( y - onPointerDownPointerY ) * 0.5 + onPointerDownLat;
-
-                }
-
-                event.preventDefault();
-
-            }
-
-            container.addEventListener( 'mouseup', onTouchEnd );
-            container.addEventListener( 'touchend', onTouchEnd );
-
-            function onTouchEnd( event ) {
-
-                if( isUserInteracting ) {
-                    isUserInteracting = false;
-                    event.preventDefault();
-                }
-
-            }
-
-            container.addEventListener( 'mousewheel', onMouseWheel, false );
-            container.addEventListener( 'DOMMouseScroll', onMouseWheel, false);
-
-            function onMouseWheel( event ) {
-
-                // WebKit
-
-                if ( event.wheelDeltaY ) {
-
-                    nfov -= event.wheelDeltaY * 0.01;
-
-                // Opera / Explorer 9
-
-                } else if ( event.wheelDelta ) {
-
-                    nfov -= event.wheelDelta * 0.05;
-
-                // Firefox
-
-                } else if ( event.detail ) {
-
-                    nfov += event.detail * 1.0;
-
-                }
-
-            }
-
-            animate();
-
-        }
-
-        function setPaper( id ) {
-
-            //if(navigator.userAgent.toLowerCase().indexOf('firefox') > -1) return;
-
-            var files = [ 'paper.jpg', 'paper2.jpg', 'brown.jpg', 'paper4.jpg', 'paper5.jpg', 'paper6.jpg', 'parchment.jpg' ];
-
-            var img = new Image();
-            img.addEventListener( 'load', function() {
-                material.uniforms.paper.value = THREE.ImageUtils.loadTexture( 'assets/' + files[ id ] );
-                material.uniforms.paper.value.needsUpdate = true;
-                document.body.style.backgroundImage = 'url(assets/' + files[ id ] + ')';
-                material.uniforms.bkgResolution.value.set( this.width, this.height );
-                settings.currentPaper = id;
-            } );
-            img.src = 'assets/' + files[ id ];
-        }
-
-        function turbulence( x, y, z ) {
-            var t = -.5;
-            for( var f = 1 ; f <= 100/12 ; f *= 2) {
-                t += Math.abs( noise.noise( f * x, f * y, f * z ) / f );
-            }
-            return t;
-        }
-
-        function setModel( id ) {
-
-            if( mesh ) scene.remove( mesh );
-
-            switch( id ) {
-                case 1: mesh = new THREE.Mesh( new THREE.CubeGeometry( 40, 40, 40 ), material ); material.uniforms.repeat.value.set( 1,1 ); break;
-                case 2: mesh = new THREE.Mesh( new THREE.SphereGeometry( 40, 36, 36 ), material ); material.uniforms.repeat.value.set( 4, 4 ); break;
-                case 3: mesh = new THREE.Mesh( new THREE.TorusKnotGeometry( 50, 10, 200, 50, 1 ,3 ), material ); material.uniforms.repeat.value.set( 20, 2 ); break;
-                case 4: mesh = new THREE.Mesh( new THREE.TorusGeometry( 50, 20, 200, 50 ), material ); material.uniforms.repeat.value.set( 4, 2 ); break;
-                case 5:
-                    mesh = new THREE.Mesh( new THREE.IcosahedronGeometry( 40, 4 ), material );
-                    for( var j = 0; j < mesh.geometry.vertices.length; j++ ) {
-                        var v = mesh.geometry.vertices[ j ];
-                        var n = v.clone();
-                        n.normalize();
-                        var f = .05;
-                        //var d = - 10 * turbulence( f * v.x, f * v.y, f * v.z );
-                        var d = 10 * noise.noise( f * v.x, f * v.y, f * v.z );
-                        v.add( n.multiplyScalar( d ) );
-                    }
-                    mesh.geometry.verticesNeedUpdate = true;
-                    //mesh.geometry.computeCentroids();
-                    mesh.geometry.computeFaceNormals();
-                    mesh.geometry.computeVertexNormals();
-                    material.uniforms.repeat.value.set( 4, 4 ); break;
-                case 6:
-                    var r = 40;
-                    var capsuleGeometry = new THREE.Geometry();
-                    var geometry = new THREE.CylinderGeometry( 50, 50, 100, r, r, 1, false );
-                    var sphereGeometry = new THREE.SphereGeometry( 50, r, r );
-                    mesh = new THREE.Mesh( geometry, material );
-                    THREE.GeometryUtils.merge( capsuleGeometry, mesh );
-                    mesh = new THREE.Mesh( sphereGeometry, material );
-                    mesh.position.set( 0, -50, 0 );
-                    THREE.GeometryUtils.merge( capsuleGeometry, mesh );
-                    mesh = new THREE.Mesh( sphereGeometry, material );
-                    mesh.position.set( 0, 50, 0 );
-                    THREE.GeometryUtils.merge( capsuleGeometry, mesh );
-
-                    mesh = new THREE.Mesh( capsuleGeometry, material );
-                    mesh.scale.set( .5, .5, .5 );
-                    material.uniforms.repeat.value.set( 2, 1 );
-            }
-
-            settings.currentModel = id;
-
-            scene.add( mesh );
-
-        }
-
-        function onWindowResize() {
-
-            material.uniforms.resolution.value.set( window.innerWidth, window.innerHeight );
-
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-
-            renderer.setSize( window.innerWidth, window.innerHeight );
-
-        }
-
-        function animate() {
-
-            render();
-            requestAnimationFrame( animate );
-
-        }
-
-        function hexToRgb(hex) {
-            var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-            return result ? {
-                r: parseInt(result[1], 16),
-                g: parseInt(result[2], 16),
-                b: parseInt(result[3], 16)
-            } : null;
-        }
-
-        function setPreset( id ) {
-
-            for( var j in presets[ id ] ) {
-                settings[ j ] = presets[ id ][ j ];
-            }
-            this.settings.preset = id;
-            this.settings.currentPreset = id;
-
-            for (var i in gui.__controllers) {
-               gui.__controllers[i].updateDisplay();
-            }
-
-        }
-
-        function render() {
-
-            var pId = settings.preset;
-            if( pId != settings.currentPreset ) setPreset( pId );
-
-            var mId = parseInt( settings.model, 10 );
-            if( mId != settings.currentModel ) setModel( mId );
-
-            var pId = parseInt( settings.paper, 10 );
-            if( pId != settings.currentPaper ) setPaper( pId );
-
-            var time = Date.now() * 0.005;
-
-            nlat = Math.max( - 85, Math.min( 85, nlat ) );
-
-            lat += ( nlat - lat ) * .1;
-            lon += ( nlon - lon ) * .1;
-
-            phi = ( 90 - lat ) * Math.PI / 180;
-            theta = lon * Math.PI / 180;
-
-            material.uniforms.ambientWeight.value = settings.ambient / 100;
-            material.uniforms.diffuseWeight.value = settings.diffuse / 100;
-            material.uniforms.rimWeight.value = settings.rim / 100;
-            material.uniforms.specularWeight.value = settings.specular / 100;
-            material.uniforms.shininess.value = settings.shininess;
-            material.uniforms.invertRim.value = settings.invertRim?1:0;
-            material.uniforms.solidRender.value = settings.solidRender?1:0;
-
-            /*var c = hexToRgb( settings.inkColor );
-            material.uniforms.inkColor.value.set( c.r / 255, c.g / 255, c.b / 255, 1 );
-            outlineMaterial.uniforms.inkColor.value.set( c.r / 255, c.g / 255, c.b / 255, 1 );*/
-
-            material.uniforms.inkColor.value.set( settings.inkColor[ 0 ] / 255, settings.inkColor[ 1 ] / 255, settings.inkColor[ 2 ] / 255, 1 );
-
-            /*if( mesh ) {
-                mesh.rotation.x += .01;
-                mesh.rotation.y += .005;
-                mesh.rotation.z += .007;
-
-                var t = .001 * Date.now();
-                mesh.material.uniforms.lightPosition.value.x = 100 * Math.cos( t );
-                mesh.material.uniforms.lightPosition.value.z = 100 * Math.sin( t );
-            }*/
-
-            fov += ( nfov - fov ) * .1;
-            camera.projectionMatrix.makePerspective( fov, window.innerWidth / window.innerHeight, 1, 1100 );
-
-            var d = 300;
-            camera.position.x = d * Math.sin( phi ) * Math.cos( theta );
-            camera.position.y = d * Math.cos( phi );
-            camera.position.z = d * Math.sin( phi ) * Math.sin( theta );
-
-            camera.lookAt( scene.position );
-
-            renderer.clear();
-            if( settings.displayOutline ) {
-                material.depthWrite = false;
-                material.uniforms.showOutline.value = 1;
-                renderer.render( scene, camera );
-            }
-            material.depthWrite = true;
-            material.uniforms.showOutline.value = 0;
-            renderer.render( scene, camera );
-
-        }
-
-
-    </script>
-
-</body>
+	mesh.geometry.dispose();
+	mesh.geometry = model.make();
+	material.uniforms.repeat.value.fromArray( model.repeat );
 
+} );
+
+effect( function () {
+
+	const u = material.uniforms;
+
+	u.ambientWeight.value = params.ambient() / 100;
+	u.diffuseWeight.value = params.diffuse() / 100;
+	u.rimWeight.value = params.rim() / 100;
+	u.specularWeight.value = params.specular() / 100;
+	u.shininess.value = params.shininess();
+	u.invertRim.value = params.invertRim() ? 1 : 0;
+	u.solidRender.value = params.solid() ? 1 : 0;
+
+	const ink = parseInt( params.ink().slice( 1 ), 16 );
+	u.inkColor.value.set( ( ink >> 16 & 255 ) / 255, ( ink >> 8 & 255 ) / 255, ( ink & 255 ) / 255 );
+
+} );
+
+// ---- looking around: drag to turn, scroll or pinch to zoom
+
+let lon = 0, lat = 15, nlon = 0, nlat = 0;
+let fov = 120, nfov = 45;
+
+const pointers = new Map();
+let down = null;
+let pinch = 0;
+
+const canvas = renderer.domElement;
+
+canvas.addEventListener( 'pointerdown', function ( e ) {
+
+	canvas.setPointerCapture( e.pointerId );
+	pointers.set( e.pointerId, { x: e.clientX, y: e.clientY } );
+	canvas.classList.add( 'dragging' );
+
+	down = { x: e.clientX, y: e.clientY, lon: nlon, lat: nlat };
+	pinch = 0;
+
+} );
+
+canvas.addEventListener( 'pointermove', function ( e ) {
+
+	if ( ! pointers.has( e.pointerId ) ) return;
+
+	pointers.set( e.pointerId, { x: e.clientX, y: e.clientY } );
+
+	if ( pointers.size === 2 ) {
+
+		const [ a, b ] = [ ...pointers.values() ];
+		const distance = Math.hypot( a.x - b.x, a.y - b.y );
+		if ( pinch > 0 ) nfov *= pinch / distance;
+		pinch = distance;
+		return;
+
+	}
+
+	if ( down === null ) return;
+
+	nlon = ( e.clientX - down.x ) * .5 + down.lon;
+	nlat = ( e.clientY - down.y ) * .5 + down.lat;
+
+} );
+
+function release( e ) {
+
+	pointers.delete( e.pointerId );
+	if ( pointers.size === 0 ) canvas.classList.remove( 'dragging' );
+
+	// the finger that stays goes on turning from where it is
+	const [ rest ] = pointers.values();
+	down = rest ? { x: rest.x, y: rest.y, lon: nlon, lat: nlat } : null;
+	pinch = 0;
+
+}
+
+canvas.addEventListener( 'pointerup', release );
+canvas.addEventListener( 'pointercancel', release );
+
+canvas.addEventListener( 'wheel', function ( e ) {
+
+	e.preventDefault();
+	nfov += e.deltaY * ( e.deltaMode === 1 ? 16 : 1 ) * .012;
+
+}, { passive: false } );
+
+window.addEventListener( 'resize', function () {
+
+	camera.aspect = window.innerWidth / window.innerHeight;
+	camera.updateProjectionMatrix();
+
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	material.uniforms.viewport.value.set( window.innerWidth, window.innerHeight );
+
+} );
+
+let last = performance.now();
+
+function render() {
+
+	requestAnimationFrame( render );
+
+	const now = performance.now();
+	const ease = 1 - Math.pow( .9, Math.min( .1, ( now - last ) / 1000 ) * 60 );
+	last = now;
+
+	nlat = Math.max( - 85, Math.min( 85, nlat ) );
+	nfov = Math.max( 10, Math.min( 120, nfov ) );
+
+	lat += ( nlat - lat ) * ease;
+	lon += ( nlon - lon ) * ease;
+	fov += ( nfov - fov ) * ease;
+
+	const phi = ( 90 - lat ) * Math.PI / 180;
+	const theta = lon * Math.PI / 180;
+	const d = 300;
+
+	camera.position.set( d * Math.sin( phi ) * Math.cos( theta ), d * Math.cos( phi ), d * Math.sin( phi ) * Math.sin( theta ) );
+	camera.lookAt( scene.position );
+
+	camera.fov = fov;
+	camera.updateProjectionMatrix();
+
+	material.uniforms.pixelRatio.value = renderer.getPixelRatio();
+
+	renderer.clear();
+
+	if ( params.outline() ) {
+
+		material.depthWrite = false;
+		material.uniforms.showOutline.value = 1;
+		renderer.render( scene, camera );
+
+	}
+
+	material.depthWrite = true;
+	material.uniforms.showOutline.value = 0;
+	renderer.render( scene, camera );
+
+}
+
+render();
+</script>
+
+	</body>
 </html>
