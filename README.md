@@ -15,7 +15,7 @@ The page has been rewritten for current three.js. What changed:
 
 - it runs on three.js r186, from a CDN with an import map, and the controls are [guspira](https://github.com/spite/guspira) instead of dat.gui
 - the paper on the model is the same size as the paper behind it on screens with more than one pixel per point. It was half the size on a 2x screen
-- the paper is one sheet that covers the page, so it doesn't repeat or show seams. The squared one still tiles, so its grid keeps its size
+- the crumpled paper is one sheet that covers the page, it showed seams where it repeated
 - zooming has limits. Scrolling far enough turned the picture inside out
 - dragging uses pointer events, so it doesn't get stuck when the button is released outside the window, and two fingers zoom
 - the camera moves at the same speed at any refresh rate

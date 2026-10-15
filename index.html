@@ -193,14 +193,14 @@ import { ImprovedNoise } from 'three/addons/math/ImprovedNoise.js';
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GUI, signal, effect } from 'https://cdn.jsdelivr.net/npm/guspira@0.1.1/dist/guspira.min.js';
 
-// each one is a sheet that covers the page, but the squared one, which tiles so its grid stays the same size
+// they tile at their size, but the crumpled one, which doesn't tile, is a sheet that covers the page
 const papers = {
 	crumpled: { file: 'paper.jpg' },
-	grainy: { file: 'paper2.jpg' },
-	fibers: { file: 'brown.jpg' },
+	grainy: { file: 'paper2.jpg', tiled: true },
+	fibers: { file: 'brown.jpg', tiled: true },
 	squared: { file: 'paper4.jpg', tiled: true },
-	wrapper: { file: 'paper5.jpg' },
-	parchment: { file: 'paper6.jpg' }
+	wrapper: { file: 'paper5.jpg', tiled: true },
+	parchment: { file: 'paper6.jpg', tiled: true }
 };
 
 const presets = {
